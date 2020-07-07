@@ -1,2 +1,4 @@
 src/db_config.json
+src/configuration.js
 node_modules
+recordings/*.webm

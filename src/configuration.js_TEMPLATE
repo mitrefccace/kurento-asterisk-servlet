@@ -1,0 +1,50 @@
+var config = {
+	clearText: true,
+	debug: 0, //0: no debug, 1: yes debug 
+	// SIP server configurations
+	sipServer: '<hostname of sip server>',
+	sipWsPort: '<wss port for sip server>',
+	credArray: [
+		{ sipId: '88001', sipPass: '<password>' },
+		{ sipId: '88002', sipPass: '<password>' },
+		{ sipId: '88003', sipPass: '<password>' },
+		{ sipId: '88004', sipPass: '<password>' },
+		{ sipId: '88005', sipPass: '<password>' }],
+	// Kurento server configurations
+	kurentoServer: "<wss for kurento media server>",
+	uploadServer: "<aserver location and port>",
+	redisHost: "<IP address of redis server>",
+	redisPort: "<Redis port>",
+	redisAuth: "<Redis authentication phrase>",
+	redisExt2VRS: '<extensionToVrs>',
+	path: '<full path to videomail servlet>',
+	playFileIntro: 'ready5.webm',
+	playFileRec: 'recording2.webm',
+}
+
+
+if (config.clearText == false) {
+	for (key in config) {
+		if (key != 'clearText') {
+			config[key] = decodeValue(config[key])
+		}
+	}
+}
+
+function decodeValue(value) {
+	if (typeof value == 'object') {
+		value = decodeObject(value)
+	} else {
+		value = Buffer.from(value, 'base64').toString();
+	}
+	return value
+}
+
+function decodeObject(obj){
+	for (x in obj) {
+		obj[x] = decodeValue(obj[x])
+	}
+	return obj;
+}
+
+module.exports = config;

@@ -3,7 +3,7 @@
 const config = require('./configuration.js');
 const registry = require('./registry.js');
 const users = require('./sipUsers.js');
-//const databasestore = require('./database-store.js');
+const redisManager = require('./redis-manager.js');
 const upload = require('./upload.js');
 
 // Imports of external dependencies.
@@ -18,7 +18,7 @@ const SIP = require('jssip');
 var userRegistry = new registry.UserRegistry();
 var sipUserPool = new users.SipUserPool();
 var kurentoClient = null;
-//var database = new databasestore.DatabaseStore();
+var redis = new redisManager.RedisManager();
 var uploadVideomail = new upload.UploadVideomail();
 
 // Definition of helper class to represent callee session.
@@ -49,16 +49,9 @@ function UserSession(ext, pass, ua) {
     this.incomingMediaProfile = null;
 }
 
-// Set up the database
-/*
-var val = database.init();
-if (val) {
-    stopAndExit(-6, null, val);
-}
-else {
-    debuglog("Succesfully initiated connection to mysql database.");
-}
-*/
+// Set up redis
+redis.init();
+
 // ---- Start the program! -----
 // This spawns a JSSIP UA that listens for an incoming call.
 var user = sipUserPool.getSipUser();
@@ -154,12 +147,20 @@ function newIncomingCall(ext, data) {
     let callee = userRegistry.getByExt(ext);
 
     // Store info on incoming call 
-    callee.incomingCaller = data.request.from.uri.user;
-    callee.session = data.session;
+    let vrsTemp = data.request.from.uri.user;
+    callee.incomingCaller = vrsTemp;
+    let regex = RegExp('9900[1-5]');
+    if (regex.test(vrsTemp)) {
+        console.log("WebRTC 9900X extension detected, attempt redis look up.")
+        Promise.resolve(redis.vrsLookup(vrsTemp)).then((value) => {
+            debuglog("Redis map extension", vrsTemp, "to", value)
+            callee.incomingCaller = value;
+        }).catch(() => {
+            debuglog("Redis Error: Occured during vrs to extension lookup.")
+        })
+    }
 
-    console.log(JSON.stringify(data.request.from.uri, null, 2))
-    console.log("--------")
-    console.log(JSON.stringify(data.request.body, null, 2))
+    callee.session = data.session;
 
     // Automatically answer incoming calls.
     // Constructs a Kurento pipeline, then uses to Kurento to generate a
@@ -270,8 +271,6 @@ function connectIncomingCall(ext, sdpOffer, callback) {
 
                     // Now the endpoints are connected!
                     debuglog("Offer SDP:\n" + sdpOffer);
-                    //Modify the incoming SDP (configuration.js)
-                    sdpOffer = config.modifySdpIncoming(sdpOffer);
 
                     //The user doesn't actually use this again, but it can't hurt to store it.
                     callee.sdpOffer = sdpOffer;
@@ -284,8 +283,7 @@ function connectIncomingCall(ext, sdpOffer, callback) {
                             return callback(error);
                         }
 
-                        // Modify the outgoing SDP (configuration.js)
-                        callee.sdpAnswer = config.modifySdpOutgoing(sdpOffer, sdpAnswer);
+                        callee.sdpAnswer = sdpAnswer;
                         debuglog('Answer SDP:\n' + callee.sdpAnswer);
 
                         return callback(null, sdpAnswer);
@@ -306,7 +304,6 @@ function connectIncomingCall(ext, sdpOffer, callback) {
  * | MediaStateChanged      | CONNECTED      | Begin recording with recorderEndpoint         |
  */
 function rtpEvents(callee, rtpEndpoint, recorderEndpoint, playerEndpoint) {
-    // TODO: Move this to function
     let body = `<?xml version="1.0" encoding="utf-8" ?>
             <media_control>
               <vc_primitive>
@@ -331,11 +328,6 @@ function rtpEvents(callee, rtpEndpoint, recorderEndpoint, playerEndpoint) {
         callee.session.sendInfo('application/media_control+xml', body);
         recorderEndpoint.record().then(() => {
             log(callee.ext, "---Starting recorder---");
-            //rtpEndpoint.connect(rtpEndpoint, function (error) {
-            //    if (error) return onError(error);
-            //    debuglog("Loopback established");
-            //    callee.session.sendInfo('application/media_control+xml', body);
-            //});
             callee.session.sendInfo('application/media_control+xml', body);
         });
     });
@@ -356,11 +348,13 @@ function rtpEvents(callee, rtpEndpoint, recorderEndpoint, playerEndpoint) {
  */
 function recorderEvents(callee, recorderEndpoint, rtpEndpoint, currentPlayerEndpoint, playerEndpointDuringRec) {
     recorderEndpoint.on('Recording', () => {
-        callee.callStartTime = new Date();
-        log(callee.ext, "Recorder: Started Successfully.  Recording now.");
+        log(callee.ext, "Recorder: Started Successfully.");
         currentPlayerEndpoint.stop();
+        callee.callStartTime = new Date();
         switchPlayers(rtpEndpoint, currentPlayerEndpoint, playerEndpointDuringRec, () => {
             startPlayerEndpoint(playerEndpointDuringRec)
+            callee.callStartTime = new Date();
+            log(callee.ext, "Recorder: Recording now.");
         });
     });
 
@@ -494,9 +488,9 @@ function createMediaElements(ext, pipeline, callback) {
             mediaPipeline: pipeline,
             mediaProfile: callee.incomingMediaProfile,
             topOnEndOfStream: true,
-            uri: "file:/" + config.path + 'recordings/abc_rec_' + date + '.' + config.recordingFormat
+            uri: "file:/" + config.path + 'recordings/videomail_' + date + '.webm'
         };
-        callee.recordingFile = 'abc_rec_' + date + '.' + config.recordingFormat;
+        callee.recordingFile = 'videomail_' + date + '.webm';
 
         //RecorderEndpoint creation
         pipeline.create('RecorderEndpoint', recordParams, function (error, recorderEndpoint) {
@@ -619,10 +613,10 @@ function getMediaProfile(sdpOffer, ext) {
     //but this loop allows us to be agnostic about the ordering of the sections.
     for (var media of sdp.media) {
         if (media.type == 'audio') {
-            audioCodec = chooseCodec(media.rtp, config.allowableAudioCodecs);
+            audioCodec = chooseCodec(media.rtp, ['PCMU', 'PCMA']);
         }
         if (media.type == 'video') {
-            videoCodec = chooseCodec(media.rtp, config.allowableVideoCodecs);
+            videoCodec = chooseCodec(media.rtp, ['VP8', 'H264']);
         }
     }
 
@@ -632,7 +626,7 @@ function getMediaProfile(sdpOffer, ext) {
     }
 
     //Did we find an acceptable audio codec?
-    if (!audioCodec) { //Only video
+    if (audioCodec || !audioCodec) { //Only video
         debuglog("WARNING: No acceptable Audio Codec found. (configuration.js:allowableAudioCodecs)");
         debuglog("Detected Video Codec: " + videoCodec);
         if (videoCodec == "VP8") {

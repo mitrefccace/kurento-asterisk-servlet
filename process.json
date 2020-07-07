@@ -1,0 +1,8 @@
+{
+    "apps": [
+        {
+            "name": "Kurento Asterisk Servlet",
+            "script": "src/server.js"
+        }
+    ]
+}
