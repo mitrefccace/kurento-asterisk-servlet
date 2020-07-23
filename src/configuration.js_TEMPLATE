@@ -20,6 +20,7 @@ var config = {
 	path: '<full path to videomail servlet>',
 	playFileIntro: 'ready5.webm',
 	playFileRec: 'recording2.webm',
+	recordLength: '180' //max time in seconds for recording
 }
 
 

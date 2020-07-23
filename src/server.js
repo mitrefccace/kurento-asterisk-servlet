@@ -175,8 +175,8 @@ function newIncomingCall(ext, data) {
             var options = {
                 rtcAnswerConstraints: callee.sdpAnswer
             };
-            callee.session.answer(options);
-            debuglog('Initial call processed.'); //At this point, we are just waiting for events to trigger.
+            callee.session.answer(options);	
+	    debuglog('Initial call processed.'); //At this point, we are just waiting for events to trigger.
         }
     });
 
@@ -326,7 +326,22 @@ function rtpEvents(callee, rtpEndpoint, recorderEndpoint, playerEndpoint) {
     playerEndpoint.on('EndOfStream', () => {
         debuglog("Endpoint Has finished playing video file. Start Recording");
         callee.session.sendInfo('application/media_control+xml', body);
-        recorderEndpoint.record().then(() => {
+
+
+
+	var eventHandlers = {
+          'succeeded': function (e) { console.log('PASSED ' + JSON.stringify(e)) },
+          'failed': function (e) { console.log('FAILED ' + JSON.stringify(e)) }
+        };
+
+        var options = {
+          'eventHandlers': eventHandlers
+        };
+
+        callee.ua.sendMessage(callee.incomingCaller, 'STARTRECORDING', options);
+
+
+	recorderEndpoint.record().then(() => {
             log(callee.ext, "---Starting recorder---");
             callee.session.sendInfo('application/media_control+xml', body);
         });
@@ -355,11 +370,13 @@ function recorderEvents(callee, recorderEndpoint, rtpEndpoint, currentPlayerEndp
             startPlayerEndpoint(playerEndpointDuringRec)
             callee.callStartTime = new Date();
             log(callee.ext, "Recorder: Recording now.");
+	    callee.hangupTimer = setTimeout(function(){callee.session.terminate();},config.recordLength * 1000);
         });
     });
 
     recorderEndpoint.on('Stopped', () => {
         debuglog("Recorder: Stopped");
+	clearTimeout(callee.hangupTimer);
     });
 }
 
