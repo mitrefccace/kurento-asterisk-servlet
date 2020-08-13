@@ -12,6 +12,7 @@
     "esdoc": "^1.1.0",
     "esdoc-standard-plugin": "^1.0.0",
     "form-data": "^3.0.0",
+    "get-video-duration": "^3.0.1",
     "jssip": "^3.3.6",
     "jssip-node-websocket": "^3.0.0",
     "kurento-client": "^6.10.0",

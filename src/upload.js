@@ -9,6 +9,7 @@ const path = require('path');
 const uploadAPI = config.uploadServer + '/UploadVideomail';
 const recordingFilepath = config.path + 'recordings/';
 const FormData = require('form-data');
+const { getVideoDurationInSeconds } = require('get-video-duration');
 
 function UploadVideomail() {
   this.post = post;
@@ -29,9 +30,10 @@ function post(callinfo) {
 
       videomailFile.on('end', function () {
         console.log("file has ended, upload the file",callinfo.incomingCaller)
+	      getVideoDurationInSeconds(filepath).then((duration) => {
         let formData = new FormData();
         formData.append('videomail', fs.createReadStream(filepath), callinfo.recordingFile);
-        formData.append('duration', callinfo.callDuration);
+        formData.append('duration', duration);
         formData.append('ext', callinfo.ext);
         formData.append('phoneNumber', callinfo.incomingCaller);
 
@@ -51,6 +53,7 @@ function post(callinfo) {
             console.log("Successful video upload:", new Date(), callinfo.incomingCaller, callinfo.recordingFile);
           }
         });
+	      });	      
       });
     } else if (err.code === 'ENOENT') {
       console.log("No Videomail File for call:", new Date(), callinfo.incomingCaller, callinfo.recordingFile);

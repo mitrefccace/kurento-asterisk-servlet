@@ -37,11 +37,6 @@ function UserSession(ext, pass, ua) {
     this.sdpAnswer = null;
     this.recordingFile = null;
 
-    // Timing Variables
-    this.callStartTime = null;
-    this.callEndTime = null;
-    this.callDuration = null;
-
     // Kurento
     this.pipeline = null;
     this.rtpEndpoint = null;
@@ -191,12 +186,8 @@ function newIncomingCall(ext, data) {
     // Triggers when the RTCSession is ended, and shuts down the program.
     callee.session.on('ended', () => {
         log(ext, 'SIP Conversation ended.');
+	clearTimeout(callee.hangupTimer);
         // Wait for the recorder to stop gracefully
-        callee.callEndTime = new Date();
-        var timeDiff = callee.callEndTime - callee.callStartTime;
-        timeDiff = timeDiff / 1000;
-        callee.callDuration = Math.round(timeDiff);
-
         if (callee.recorderEndpoint) {
             callee.recorderEndpoint.stopAndWait().then(function (error) {
                 if (error) {
@@ -244,7 +235,7 @@ function connectIncomingCall(ext, sdpOffer, callback) {
             callee.pipeline = pipeline;
 
             // Check the incoming sdp to determine the correct incomingMediaProfile
-            callee.incomingMediaProfile = getMediaProfile(sdpOffer, ext);
+            callee.incomingMediaProfile = 'WEBM_VIDEO_ONLY';//getMediaProfile(sdpOffer, ext);
             log(callee.ext, "Detected Incoming Media Profile: " + callee.incomingMediaProfile);
 
             // Create the Endpoints.
@@ -365,10 +356,8 @@ function recorderEvents(callee, recorderEndpoint, rtpEndpoint, currentPlayerEndp
     recorderEndpoint.on('Recording', () => {
         log(callee.ext, "Recorder: Started Successfully.");
         currentPlayerEndpoint.stop();
-        callee.callStartTime = new Date();
         switchPlayers(rtpEndpoint, currentPlayerEndpoint, playerEndpointDuringRec, () => {
             startPlayerEndpoint(playerEndpointDuringRec)
-            callee.callStartTime = new Date();
             log(callee.ext, "Recorder: Recording now.");
 	    callee.hangupTimer = setTimeout(function(){callee.session.terminate();},config.recordLength * 1000);
         });
@@ -504,7 +493,7 @@ function createMediaElements(ext, pipeline, callback) {
         recordParams = {
             mediaPipeline: pipeline,
             mediaProfile: callee.incomingMediaProfile,
-            topOnEndOfStream: true,
+            stopOnEndOfStream: true,
             uri: "file:/" + config.path + 'recordings/videomail_' + date + '.webm'
         };
         callee.recordingFile = 'videomail_' + date + '.webm';
