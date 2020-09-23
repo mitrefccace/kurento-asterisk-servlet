@@ -33,6 +33,7 @@ function UserSession(ext, pass, ua) {
 
     // Call Info
     this.incomingCaller = null;
+    this.incomingExtension = null;
     this.sdpOffer = null;
     this.sdpAnswer = null;
     this.recordingFile = null;
@@ -144,6 +145,7 @@ function newIncomingCall(ext, data) {
     // Store info on incoming call 
     let vrsTemp = data.request.from.uri.user;
     callee.incomingCaller = vrsTemp;
+    callee.incomingExtension = vrsTemp
     let regex = RegExp('9900[1-5]');
     if (regex.test(vrsTemp)) {
         console.log("WebRTC 9900X extension detected, attempt redis look up.")
@@ -320,7 +322,8 @@ function rtpEvents(callee, rtpEndpoint, recorderEndpoint, playerEndpoint) {
 
 
 
-	var eventHandlers = {
+if(callee.incomingExtension != callee.incomingCaller){
+        var eventHandlers = {
           'succeeded': function (e) { console.log('PASSED ' + JSON.stringify(e)) },
           'failed': function (e) { console.log('FAILED ' + JSON.stringify(e)) }
         };
@@ -329,8 +332,8 @@ function rtpEvents(callee, rtpEndpoint, recorderEndpoint, playerEndpoint) {
           'eventHandlers': eventHandlers
         };
 
-        callee.ua.sendMessage(callee.incomingCaller, 'STARTRECORDING', options);
-
+        callee.ua.sendMessage(callee.incomingExtension, 'STARTRECORDING', options);
+        }
 
 	recorderEndpoint.record().then(() => {
             log(callee.ext, "---Starting recorder---");
