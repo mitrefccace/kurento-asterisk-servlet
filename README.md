@@ -14,3 +14,4 @@ To install kurento asterisk servlet:
 ### Configuration
 
 The Kurento Asterisk Servlet has a configuration file located at src/configuration.js_TEMPLATE. Create a copy of the template file in the same directory, rename it to `configuration.js`. The configuration file has fields that are unique for your environment, these fields are identified by `<description of value>`. Replace template values with actual values related to your environment. 
+
