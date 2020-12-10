@@ -20,9 +20,15 @@ function post(callinfo) {
   console.log("Attempting to Post Videomail recording", callinfo.recordingFile, callinfo.incomingCaller)
   let filepath = recordingFilepath + callinfo.recordingFile
   fs.stat(filepath, function (err, stat) {
-    if (stat.size == 0) {
+    if (err) {
+      if (err.code === 'ENOENT') {
+        console.log("No Videomail File for call:", new Date(), callinfo.incomingCaller, callinfo.recordingFile);
+      } else {
+        console.log('Error when trying to upload file: ', err.code);
+      }
+    } else if (stat && stat.size == 0) {
       console.log('Error Videomail file contains no data: ', new Date(), callinfo.incomingCaller, callinfo.recordingFile);
-    } else if (!err) {
+    } else {
       let videomailFile = fs.createReadStream(filepath);
       videomailFile.on('data', (chunk) => {
         // just to be sure file has reached the end.
@@ -55,10 +61,6 @@ function post(callinfo) {
           });
         });
       });
-    } else if (err.code === 'ENOENT') {
-      console.log("No Videomail File for call:", new Date(), callinfo.incomingCaller, callinfo.recordingFile);
-    } else {
-      console.log('Error when trying to upload file: ', err.code);
     }
   });
 }
